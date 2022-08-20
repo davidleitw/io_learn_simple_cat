@@ -7,6 +7,7 @@
 #include <sys/uio.h>
 
 #include <fcntl.h>
+#include <unistd.h>
 #include <linux/fs.h>
 
 #define isblk S_ISBLK
@@ -15,7 +16,7 @@
 // block size
 constexpr int BLOCK_SIZE_ = 4096;
 
-off_t getFileSize(int fd) {
+size_t getFileSize(int fd) {
   std::shared_ptr<struct stat> st = std::make_shared<struct stat>();
 
   if (fstat(fd, st.get()) < 0) {
@@ -41,28 +42,22 @@ int cat(const char *file_name) {
     return 1;
   }
 
-  off_t file_size = getFileSize(fd);
-  off_t byte_rem = file_size;
+  size_t file_size = getFileSize(fd);
+  size_t byte_rem = file_size;
   std::cout << file_name << ": " << file_size << std::endl;
-
-  int blocks = (int)(file_size / BLOCK_SIZE_);
-  if (file_size % BLOCK_SIZE_)
-    blocks++;
 
   std::vector<struct iovec> ivs;
   while (byte_rem) {
-    size_t bytes_to_read = byte_rem;
-    if (bytes_to_read > BLOCK_SIZE_)
-      bytes_to_read = BLOCK_SIZE_;
+    size_t bytes_to_read = byte_rem > BLOCK_SIZE_ ? BLOCK_SIZE_ : byte_rem;
 
-    void *buff;
-    if (posix_memalign(&buff, BLOCK_SIZE_, BLOCK_SIZE_)) {
+    void *buf;
+    if (posix_memalign(&buf, BLOCK_SIZE_, BLOCK_SIZE_)) {
       std::cout << "posix error" << std::endl;
       return -1;
     }
 
     struct iovec iv {
-      .iov_base = buff, .iov_len = bytes_to_read,
+      .iov_base = buf, .iov_len = bytes_to_read,
     };
     ivs.push_back(iv);
     byte_rem -= bytes_to_read;
@@ -78,6 +73,7 @@ int cat(const char *file_name) {
     const std::string b(static_cast<char *>(ivs[i].iov_base));
     std::cout << b;
   }
+  close(fd);
   return 0;
 }
 
